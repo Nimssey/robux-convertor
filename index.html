@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robux Convertor</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root{--bg:#0f1115;--card:#181b22;--line:#2a2f3a;--text:#e9ecf1;--muted:#8b93a3;--acc:#00b06f;--acc2:#3b82f6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding:32px 16px}
+  .wrap{width:100%;max-width:520px}
+  h1{font-size:1.6rem;margin:0 0 4px}
+  p.sub{color:var(--muted);margin:0 0 24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+  label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+  input,select{width:100%;padding:12px 14px;font-size:1.1rem;background:#0f1115;color:var(--text);border:1px solid var(--line);border-radius:10px;outline:none}
+  input:focus,select:focus{border-color:var(--acc)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  .presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .presets button{background:#0f1115;color:var(--text);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:.85rem}
+  .presets button.on{border-color:var(--acc);color:var(--acc)}
+  .out{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .box{background:#0f1115;border:1px solid var(--line);border-radius:12px;padding:16px}
+  .box span{font-size:.8rem;color:var(--muted)}
+  .box b{display:block;font-size:1.7rem;margin-top:4px}
+  .usd b{color:var(--acc)} .eur b{color:var(--acc2)}
+  .info{font-size:.8rem;color:var(--muted);margin-top:12px}
+  @media(max-width:420px){.row,.out{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Robux Convertor</h1>
+  <p class="sub">Convert Robux with a custom rate and a live USD → EUR exchange rate.</p>
+
+  <div class="card">
+    <label for="robux">Robux amount</label>
+    <input id="robux" type="number" min="0" value="1000">
+
+    <div class="row">
+      <div>
+        <label for="rate">Rate (USD per 1 Robux)</label>
+        <input id="rate" type="number" min="0" step="0.0001" value="0.0035">
+      </div>
+      <div>
+        <label for="fx">USD → EUR rate</label>
+        <input id="fx" type="number" min="0" step="0.0001" value="0.92">
+      </div>
+    </div>
+    <div class="presets" id="presets">
+      <button data-r="0.0035" class="on">DevEx 0.0035</button>
+      <button data-r="0.0038">DevEx 0.0038</button>
+      <button data-r="0.0125">Purchase ~0.0125</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="out">
+      <div class="box usd"><span>USD</span><b id="usd">-</b></div>
+      <div class="box eur"><span>EUR</span><b id="eur">-</b></div>
+    </div>
+    <div class="info" id="info"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmtUSD = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
+const fmtEUR = new Intl.NumberFormat('en-IE',{style:'currency',currency:'EUR'});
+
+function calc(){
+  const r = parseFloat($('robux').value)||0;
+  const rate = parseFloat($('rate').value)||0;
+  const fx = parseFloat($('fx').value)||0;
+  if(!fxReady){ $('usd').textContent='-'; $('eur').textContent='-'; return; }
+  const usd = r*rate;
+  $('usd').textContent = fmtUSD.format(usd);
+  $('eur').textContent = fmtEUR.format(usd*fx);
+  document.querySelectorAll('#presets button').forEach(b=>b.classList.toggle('on', parseFloat(b.dataset.r)===rate));
+}
+
+['robux','rate','fx'].forEach(id=>$(id).addEventListener('input',calc));
+$('presets').addEventListener('click',e=>{
+  if(e.target.dataset.r){ $('rate').value=e.target.dataset.r; calc(); }
+});
+
+let manual = false, fxReady = false;
+$('fx').addEventListener('input',()=>{ manual = true; fxReady = true; calc(); });
+
+async function loadFx(){
+  if(manual) return;
+  let rate, src;
+  try{
+    // Coinbase: real-time, free, no API key
+    const d = await (await fetch('https://api.coinbase.com/v2/exchange-rates?currency=USD')).json();
+    rate = parseFloat(d.data.rates.EUR); src = 'Coinbase (real-time)';
+  }catch(e){
+    try{
+      const d = await (await fetch('https://api.frankfurter.app/latest?from=USD&to=EUR')).json();
+      rate = d.rates.EUR; src = `ECB (${d.date})`;
+    }catch(e2){}
+  }
+  if(rate){
+    $('fx').value = rate.toFixed(5);
+    $('info').textContent = `1 USD = ${rate.toFixed(5)} EUR · source: ${src} · updated at ${new Date().toLocaleTimeString('en-GB')} (every 30s)`;
+  }else{
+    $('info').textContent = '';
+  }
+  fxReady = true; calc();
+}
+$('info').addEventListener('dblclick',()=>{ manual=false; loadFx(); });
+calc(); loadFx(); setInterval(loadFx, 30000);
+</script>
+</body>
+</html>
